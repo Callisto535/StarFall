@@ -2726,6 +2726,7 @@ let joyX = 0, joyY = 0;            // joystick movement from -1 to 1
 let joyTouchId = null, joyOx = 0, joyOy = 0;
 let aimTouchId = null;
 let touchFire = false;
+let fireStickX = 0, fireStickY = 0;
 const JOY_RADIUS = 60;
 const BTN_X = 750, BTN_PAUSE_Y = 112, BTN_MUTE_Y = 162, BTN_MENU_Y = 212, BTN_R = 24;
 
@@ -2836,10 +2837,16 @@ function updateFireStick(x, y) {
   let vy = y - padY;
   const distance = Math.hypot(vx, vy);
 
-  if (distance < 10) return;
+  if (distance < 10) {
+    fireStickX = 0;
+    fireStickY = 0;
+    return;
+  }
   const scale = JOY_RADIUS / Math.max(distance, JOY_RADIUS);
   vx *= scale;
   vy *= scale;
+  fireStickX = vx / JOY_RADIUS;
+  fireStickY = vy / JOY_RADIUS;
 
   // Convert the stick direction into a target far away from the ship.
   // This lets the player aim in all directions instead of aiming at the pad.
@@ -2902,14 +2909,10 @@ function drawTouchUI() {
       stroke(255, 120, 150, 200);
       strokeWeight(2);
       ellipse(padX, padY, JOY_RADIUS * 2, JOY_RADIUS * 2);
-      const dx = aimX - padX;
-      const dy = aimY - padY;
-      const knobX = padX + dx;
-      const knobY = padY + dy;
+      const knobX = padX + fireStickX * JOY_RADIUS;
+      const knobY = padY + fireStickY * JOY_RADIUS;
       fill(255, 160, 180, 170);
       ellipse(knobX, knobY, 38, 38);
-      line(knobX - 18, knobY, knobX + 18, knobY);
-      line(knobX, knobY - 18, knobX, knobY + 18);
     }
   }
 
