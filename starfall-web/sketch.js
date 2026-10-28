@@ -2778,15 +2778,7 @@ function handleTouchStart(id, x, y) {
       joyTouchId = id; joyOx = x; joyOy = y;
     } else {                                             // right side: analog fire pad
       aimTouchId = id;
-      const padX = width - 105;
-      const padY = height - 105;
-      const dx = x - padX;
-      const dy = y - padY;
-      const d = Math.hypot(dx, dy);
-      const maxDist = JOY_RADIUS;
-      const clamped = d > maxDist ? maxDist / d : 1;
-      aimX = padX + dx * clamped;
-      aimY = padY + dy * clamped;
+      updateFireStick(x, y);
       touchFire = true;
     }
   }
@@ -2828,24 +2820,32 @@ function updateTouchControls() {
   if (aimTouchId !== null) {
     const t = findTouch(aimTouchId);
     if (t) {
-      const padX = width - 105;
-      const padY = height - 105;
-      let vx = t.x - padX;
-      let vy = t.y - padY;
-      const d = Math.hypot(vx, vy);
-      const maxDist = JOY_RADIUS;
-      if (d > maxDist) {
-        const scale = maxDist / d;
-        vx *= scale;
-        vy *= scale;
-      }
-      aimX = padX + vx;
-      aimY = padY + vy;
+      updateFireStick(t.x, t.y);
       touchFire = true;
     } else {
       aimTouchId = null;
     }
   }
+
+}
+
+function updateFireStick(x, y) {
+  const padX = width - 105;
+  const padY = height - 105;
+  let vx = x - padX;
+  let vy = y - padY;
+  const distance = Math.hypot(vx, vy);
+
+  if (distance < 10) return;
+  const scale = JOY_RADIUS / Math.max(distance, JOY_RADIUS);
+  vx *= scale;
+  vy *= scale;
+
+  // Convert the stick direction into a target far away from the ship.
+  // This lets the player aim in all directions instead of aiming at the pad.
+  const length = Math.max(width, height);
+  aimX = player ? player.x + (vx / JOY_RADIUS) * length : padX + vx;
+  aimY = player ? player.y + (vy / JOY_RADIUS) * length : padY + vy;
 }
 
 function drawRoundButton(by, label) {
