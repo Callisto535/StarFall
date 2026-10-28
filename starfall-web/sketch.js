@@ -2776,8 +2776,18 @@ function handleTouchStart(id, x, y) {
   if (isPlaying()) {
     if (x < width * 0.5) {                               // left side: joystick starts where you touch
       joyTouchId = id; joyOx = x; joyOy = y;
-    } else {                                             // right side: aim + fire
-      aimTouchId = id; aimX = x; aimY = y;
+    } else {                                             // right side: analog fire pad
+      aimTouchId = id;
+      const padX = width - 105;
+      const padY = height - 105;
+      const dx = x - padX;
+      const dy = y - padY;
+      const d = Math.hypot(dx, dy);
+      const maxDist = JOY_RADIUS;
+      const clamped = d > maxDist ? maxDist / d : 1;
+      aimX = padX + dx * clamped;
+      aimY = padY + dy * clamped;
+      touchFire = true;
     }
   }
 }
@@ -2817,8 +2827,24 @@ function updateTouchControls() {
   touchFire = false;
   if (aimTouchId !== null) {
     const t = findTouch(aimTouchId);
-    if (t) { aimX = t.x; aimY = t.y; touchFire = true; }
-    else { aimTouchId = null; }
+    if (t) {
+      const padX = width - 105;
+      const padY = height - 105;
+      let vx = t.x - padX;
+      let vy = t.y - padY;
+      const d = Math.hypot(vx, vy);
+      const maxDist = JOY_RADIUS;
+      if (d > maxDist) {
+        const scale = maxDist / d;
+        vx *= scale;
+        vy *= scale;
+      }
+      aimX = padX + vx;
+      aimY = padY + vy;
+      touchFire = true;
+    } else {
+      aimTouchId = null;
+    }
   }
 }
 
@@ -2859,24 +2885,31 @@ function drawTouchUI() {
       text('MOVE', ox, oy);
     }
 
-    // aim + fire area: hint at the bottom-right, crosshair while touching
+    const padX = width - 105;
+    const padY = height - 105;
     if (aimTouchId === null) {
       noFill();
       stroke(255, 120, 150, 70);
       strokeWeight(3);
-      ellipse(width - 105, height - 105, JOY_RADIUS * 2, JOY_RADIUS * 2);
+      ellipse(padX, padY, JOY_RADIUS * 2, JOY_RADIUS * 2);
       noStroke();
       fill(255, 190, 205, 120);
       textAlign(CENTER, CENTER);
       textSize(13);
-      text('AIM + FIRE', width - 105, height - 105);
+      text('FIRE', padX, padY);
     } else {
       noFill();
       stroke(255, 120, 150, 200);
       strokeWeight(2);
-      ellipse(aimX, aimY, 38, 38);
-      line(aimX - 24, aimY, aimX + 24, aimY);
-      line(aimX, aimY - 24, aimX, aimY + 24);
+      ellipse(padX, padY, JOY_RADIUS * 2, JOY_RADIUS * 2);
+      const dx = aimX - padX;
+      const dy = aimY - padY;
+      const knobX = padX + dx;
+      const knobY = padY + dy;
+      fill(255, 160, 180, 170);
+      ellipse(knobX, knobY, 38, 38);
+      line(knobX - 18, knobY, knobX + 18, knobY);
+      line(knobX, knobY - 18, knobX, knobY + 18);
     }
   }
 
