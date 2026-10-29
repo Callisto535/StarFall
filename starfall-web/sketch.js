@@ -850,7 +850,7 @@ function drawEndScreen(won) {
   text("SCORE  " + score, width / 2, height / 2 + 5);
   textSize(16);
   fill(180, 205, 235);
-  text("Press R to retry  \u2022  Press ESC for menu", width / 2, height / 2 + 55);
+  text(touchActive() ? "Tap a button below" : "Press R to retry  \u2022  Press ESC for menu", width / 2, height / 2 + 55);
 }
 
 function drawPauseOverlay() {
@@ -2593,6 +2593,8 @@ function loadOptionalImage(file, onLoad) {
 function setup() {
   const cnv = createCanvas(800, 600);
   gameCanvas = cnv.elt;
+  fitCanvasToScreen();
+  buildTouchUI();
   cnv.elt.addEventListener('contextmenu', (e) => e.preventDefault());   // no right-click menu
   imageMode(CENTER);
   textFont('Arial');
@@ -2713,33 +2715,41 @@ function showError(e) {
 
 // ============================================================
 // PHONE / TABLET CONTROLS
-//   Left half of the screen  : touch and drag = move (joystick)
-//   Right half of the screen : touch and drag = aim, and the ship fires while you hold
-//   Buttons on the right     : pause, sound, menu (when paused)
-// Computers keep WASD + mouse. Phone mode switches on at the first touch.
+//   Two analog sticks sit in the empty space BESIDE the game (left and right):
+//     left stick  = move the ship
+//     right stick = aim, and the ship fires while you push the stick
+//   Round buttons (pause, sound, fullscreen, menu) are in the right-hand space.
+//   Computers keep WASD + mouse.
 // ============================================================
 
 let touchMode = false;
 let gameCanvas = null;
-let aimX = 400, aimY = 0;          // where the ship points (mouse on computer, finger on phone)
-let joyX = 0, joyY = 0;            // joystick movement from -1 to 1
-let joyTouchId = null, joyOx = 0, joyOy = 0;
-let aimTouchId = null;
-let touchFire = false;
-let fireStickX = 0, fireStickY = 0;
-const JOY_RADIUS = 60;
-const BTN_X = 750, BTN_PAUSE_Y = 112, BTN_MUTE_Y = 162, BTN_MENU_Y = 212, BTN_R = 24;
+let aimX = 400, aimY = 0;               // where the ship points
+let aimAngle = -Math.PI / 2;            // last aim direction (starts pointing up)
+let joyX = 0, joyY = 0;                 // move stick, from -1 to 1
+let touchFire = false;                  // true while the aim stick is pushed
+let endStart = -1;                      // frame when the end screen appeared
+let stickR = 56;                        // stick radius in screen pixels
+let tuiBuilt = false;
+let tuiLayoutKey = '';
+let coarseCached = null;
 
-function findTouch(id) {
-  for (const t of touches) {
-    if (t.id === id) return t;
+const sticks = {
+  move: { id: null, ox: 0, oy: 0, vx: 0, vy: 0, el: null, knob: null },
+  aim:  { id: null, ox: 0, oy: 0, vx: 0, vy: 0, el: null, knob: null },
+};
+const tbtns = {};                       // round buttons: pause, sound, full, menu
+const tbtnLabel = {};
+
+function viewW() { return typeof window !== 'undefined' ? window.innerWidth : 852; }
+function viewH() { return typeof window !== 'undefined' ? window.innerHeight : 393; }
+function isCoarse() {
+  if (coarseCached === null) {
+    coarseCached = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
   }
-  return null;
+  return coarseCached;
 }
-
-function btnHit(x, y, by) {
-  return dist(x, y, BTN_X, by) < BTN_R + 8;
-}
+function touchActive() { return touchMode || isCoarse(); }
 
 function clientToCanvas(cx, cy) {
   const r = gameCanvas.getBoundingClientRect();
@@ -2762,171 +2772,289 @@ function menuClickAt(x, y) {
   }
 }
 
-function handleTouchStart(id, x, y) {
-  if (gameState === MENU) { menuClickAt(x, y); return; }
-  if (gameState === GAME_OVER || gameState === VICTORY) {
-    if (x < 230 && y > height - 120) startAtMenu();      // bottom-left corner = menu
-    else restartCurrentMode();                           // anywhere else = try again
-    return;
-  }
-  if (isPlaying() || gameState === PAUSED) {
-    if (btnHit(x, y, BTN_PAUSE_Y)) { togglePause(); return; }
-    if (btnHit(x, y, BTN_MUTE_Y)) { soundMuted = !soundMuted; return; }
-    if (gameState === PAUSED && btnHit(x, y, BTN_MENU_Y)) { startAtMenu(); return; }
-  }
-  if (isPlaying()) {
-    if (x < width * 0.5) {                               // left side: joystick starts where you touch
-      joyTouchId = id; joyOx = x; joyOy = y;
-    } else {                                             // right side: analog fire pad
-      aimTouchId = id;
-      updateFireStick(x, y);
-      touchFire = true;
-    }
-  }
+// "TRY AGAIN" and "MENU" buttons on the game-over / victory screen
+function endButtonRect(which) {
+  const w = 160, h = 48, gap = 16;
+  return { x: width / 2 - w - gap / 2 + which * (w + gap), y: height / 2 + 90, w: w, h: h };
 }
 
-function touchStarted(e) {
+function handleTouchStart(id, cx, cy) {
+  const p = clientToCanvas(cx, cy);
+  if (gameState === MENU) { menuClickAt(p.x, p.y); return; }
+
+  if (gameState === GAME_OVER || gameState === VICTORY) {
+    // Taps are ignored for a moment, so a thumb that is still on a stick can never
+    // press a button by accident. Only the two buttons count (no corner taps).
+    if (endStart >= 0 && frameCount - endStart > 45) {
+      for (let k = 0; k < 2; k++) {
+        const r = endButtonRect(k);
+        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+          if (k === 0) restartCurrentMode(); else startAtMenu();
+          return;
+        }
+      }
+    }
+    return;
+  }
+
+  if (!isPlaying()) return;
+  const st = cx < viewW() / 2 ? sticks.move : sticks.aim;     // left half = move, right half = aim
+  if (st.id === null) { st.id = id; st.ox = cx; st.oy = cy; st.vx = 0; st.vy = 0; }
+}
+
+function onTouchStartNative(e) {
   touchMode = true;
   startAudioSafely();
-  const list = (e && e.changedTouches) ? e.changedTouches : [];
-  for (const t of list) {
-    const p = clientToCanvas(t.clientX, t.clientY);
-    handleTouchStart(t.identifier, p.x, p.y);
-  }
-  return false;              // stops the page from scrolling or zooming
+  for (const t of e.changedTouches) handleTouchStart(t.identifier, t.clientX, t.clientY);
+  if (e.cancelable) e.preventDefault();      // no scrolling, zooming or fake mouse clicks
 }
+
+function onTouchMoveNative(e) {
+  for (const t of e.changedTouches) {
+    for (const st of [sticks.move, sticks.aim]) {
+      if (st.id === t.identifier) { st.vx = t.clientX - st.ox; st.vy = t.clientY - st.oy; }
+    }
+  }
+  if (e.cancelable) e.preventDefault();
+}
+
+function onTouchEndNative(e) {
+  for (const t of e.changedTouches) {
+    for (const st of [sticks.move, sticks.aim]) {
+      if (st.id === t.identifier) { st.id = null; st.vx = 0; st.vy = 0; }
+    }
+  }
+  if (e.cancelable) e.preventDefault();
+}
+
+// p5's own touch functions do nothing (this also stops p5 from sending fake mouse clicks)
+function touchStarted() { return false; }
 function touchMoved() { return false; }
 function touchEnded() { return false; }
 
 function updateTouchControls() {
-  if (!touchMode) {                                      // computer: mouse aims, WASD moves
+  if (gameState === GAME_OVER || gameState === VICTORY) {
+    if (endStart < 0) endStart = frameCount;
+  } else {
+    endStart = -1;
+  }
+
+  if (!touchActive()) {                       // computer: mouse aims, WASD moves
     aimX = mouseX; aimY = mouseY;
     touchFire = false; joyX = 0; joyY = 0;
     return;
   }
-  joyX = 0; joyY = 0;
-  if (joyTouchId !== null) {
-    const t = findTouch(joyTouchId);
-    if (t) {
-      let vx = t.x - joyOx, vy = t.y - joyOy;
-      const d = Math.hypot(vx, vy);
-      if (d > JOY_RADIUS) { vx = vx / d * JOY_RADIUS; vy = vy / d * JOY_RADIUS; }
-      joyX = vx / JOY_RADIUS; joyY = vy / JOY_RADIUS;
-      if (Math.hypot(joyX, joyY) < 0.18) { joyX = 0; joyY = 0; }   // small dead zone
-    } else {
-      joyTouchId = null;
-    }
-  }
+
+  const R = stickR;
+
+  // move stick
+  let mx = sticks.move.vx, my = sticks.move.vy;
+  const md = Math.hypot(mx, my);
+  if (md > R) { mx = mx / md * R; my = my / md * R; }
+  joyX = mx / R; joyY = my / R;
+  if (Math.hypot(joyX, joyY) < 0.18) { joyX = 0; joyY = 0; }      // small dead zone
+
+  // aim stick: the direction you push is the direction of fire
   touchFire = false;
-  if (aimTouchId !== null) {
-    const t = findTouch(aimTouchId);
-    if (t) {
-      updateFireStick(t.x, t.y);
-      touchFire = true;
-    } else {
-      aimTouchId = null;
+  const ax = sticks.aim.vx, ay = sticks.aim.vy;
+  if (sticks.aim.id !== null && Math.hypot(ax, ay) > R * 0.3) {
+    aimAngle = Math.atan2(ay, ax);
+    touchFire = true;
+  }
+  if (player) {
+    aimX = player.x + Math.cos(aimAngle) * 300;
+    aimY = player.y + Math.sin(aimAngle) * 300;
+  }
+}
+
+// ---------------- the sticks and buttons on the page ----------------
+
+function buildTouchUI() {
+  if (tuiBuilt || typeof document === 'undefined') return;
+  tuiBuilt = true;
+
+  const css = document.createElement('style');
+  css.textContent =
+    '#tui{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:20;' +
+      '-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
+    '.tstick{position:absolute;box-sizing:border-box;border-radius:50%;display:none}' +
+    '.tstick.move{border:3px solid rgba(120,200,255,.6);background:rgba(120,200,255,.10)}' +
+    '.tstick.fire{border:3px solid rgba(255,120,150,.65);background:rgba(255,120,150,.10)}' +
+    '.tknob{position:absolute;left:50%;top:50%;width:46%;height:46%;border-radius:50%}' +
+    '.move .tknob{background:rgba(120,200,255,.6)}' +
+    '.fire .tknob{background:rgba(255,120,150,.65)}' +
+    '.tlabel{position:absolute;left:-20px;right:-20px;top:-20px;text-align:center;' +
+      'font:bold 11px Arial,sans-serif;color:rgba(200,225,255,.8)}' +
+    '.tbtn{position:absolute;box-sizing:border-box;width:46px;height:46px;border-radius:50%;' +
+      'border:2px solid rgba(120,200,255,.8);background:rgba(10,20,40,.8);color:#dcefff;' +
+      'font:bold 9px Arial,sans-serif;display:none;align-items:center;justify-content:center;' +
+      'text-align:center;pointer-events:auto;-webkit-tap-highlight-color:transparent}';
+  document.head.appendChild(css);
+
+  const root = document.createElement('div');
+  root.id = 'tui';
+  document.body.appendChild(root);
+
+  function makeStick(st, cls, label) {
+    st.el = document.createElement('div');
+    st.el.className = 'tstick ' + cls;
+    st.knob = document.createElement('div');
+    st.knob.className = 'tknob';
+    const lab = document.createElement('div');
+    lab.className = 'tlabel';
+    lab.textContent = label;
+    st.el.appendChild(st.knob);
+    st.el.appendChild(lab);
+    root.appendChild(st.el);
+  }
+  makeStick(sticks.move, 'move', 'MOVE');
+  makeStick(sticks.aim, 'fire', 'AIM + FIRE');
+
+  function makeBtn(key, onTap, onLift) {
+    const b = document.createElement('div');
+    b.className = 'tbtn';
+    b.addEventListener('touchstart', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      touchMode = true; startAudioSafely();
+      if (onTap) onTap();
+    }, { passive: false });
+    b.addEventListener('touchend', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (onLift) onLift();
+    }, { passive: false });
+    root.appendChild(b);
+    tbtns[key] = b;
+  }
+  makeBtn('pause', () => togglePause());
+  makeBtn('sound', () => { soundMuted = !soundMuted; });
+  makeBtn('full', null, () => { try { fullscreen(!fullscreen()); } catch (err) { /* ignore */ } });
+  makeBtn('menu', () => startAtMenu());
+
+  window.addEventListener('touchstart', onTouchStartNative, { passive: false });
+  window.addEventListener('touchmove', onTouchMoveNative, { passive: false });
+  window.addEventListener('touchend', onTouchEndNative, { passive: false });
+  window.addEventListener('touchcancel', onTouchEndNative, { passive: false });
+}
+
+// Put the sticks in the free space beside the game. If the screen is almost 4:3
+// (no free space), they go over the corners of the game instead.
+function layoutTouchUI() {
+  if (!tuiBuilt || !gameCanvas) return;
+  const r = gameCanvas.getBoundingClientRect();
+  const vw = viewW(), vh = viewH();
+  const leftBar = r.left, rightBar = vw - r.right;
+  const bar = Math.min(leftBar, rightBar);
+  const roomy = bar >= 100;
+
+  stickR = roomy ? Math.max(38, Math.min(64, bar * 0.36)) : 46;
+  const cy = vh - stickR - 30;
+  const lx = roomy ? leftBar / 2 : stickR + 16;
+  const rx = roomy ? r.right + rightBar / 2 : vw - stickR - 16;
+
+  const place = (st, cx) => {
+    st.el.style.left = (cx - stickR) + 'px';
+    st.el.style.top = (cy - stickR) + 'px';
+    st.el.style.width = (stickR * 2) + 'px';
+    st.el.style.height = (stickR * 2) + 'px';
+  };
+  place(sticks.move, lx);
+  place(sticks.aim, rx);
+
+  // buttons: top of the right-hand space (two per row), or a column at the top-right corner
+  const pos = roomy
+    ? { pause: [rx - 28, 34], sound: [rx + 28, 34], full: [rx - 28, 90], menu: [rx + 28, 90] }
+    : { pause: [vw - 34, 34], sound: [vw - 34, 90], full: [vw - 34, 146], menu: [vw - 34, 202] };
+  for (const key of Object.keys(pos)) {
+    tbtns[key].style.left = (pos[key][0] - 23) + 'px';
+    tbtns[key].style.top = (pos[key][1] - 23) + 'px';
+  }
+}
+
+function setBtn(key, visible, label) {
+  const b = tbtns[key];
+  b.style.display = visible ? 'flex' : 'none';
+  if (visible && tbtnLabel[key] !== label) { b.textContent = label; tbtnLabel[key] = label; }
+}
+
+function updateTouchDom() {
+  if (!tuiBuilt || !gameCanvas) return;
+  const r = gameCanvas.getBoundingClientRect();
+  const key = [Math.round(r.left), Math.round(r.width), viewW(), viewH()].join(',');
+  if (key !== tuiLayoutKey) { tuiLayoutKey = key; layoutTouchUI(); }
+
+  const want = touchActive();
+  const playing = isPlaying();
+  const paused = gameState === PAUSED;
+
+  for (const st of [sticks.move, sticks.aim]) {
+    const show = want && playing;
+    st.el.style.display = show ? 'block' : 'none';
+    if (show) {
+      let vx = st.vx, vy = st.vy;
+      const d = Math.hypot(vx, vy);
+      if (d > stickR) { vx = vx / d * stickR; vy = vy / d * stickR; }
+      st.knob.style.transform = 'translate(calc(-50% + ' + vx + 'px), calc(-50% + ' + vy + 'px))';
+      st.el.style.opacity = st.id !== null ? '1' : '0.7';
     }
   }
 
+  const showBtns = want && (playing || paused);
+  const isFull = typeof fullscreen === 'function' && fullscreen();
+  setBtn('pause', showBtns, paused ? 'PLAY' : 'PAUSE');
+  setBtn('sound', showBtns, soundMuted ? 'MUTED' : 'SOUND');
+  setBtn('full', showBtns && canFullscreen(), isFull ? 'EXIT' : 'FULL');
+  setBtn('menu', want && paused, 'MENU');
 }
 
-function updateFireStick(x, y) {
-  const padX = width - 105;
-  const padY = height - 105;
-  let vx = x - padX;
-  let vy = y - padY;
-  const distance = Math.hypot(vx, vy);
-
-  if (distance < 10) {
-    fireStickX = 0;
-    fireStickY = 0;
-    return;
+function drawEndButtons() {
+  push();
+  rectMode(CORNER);
+  const ready = endStart >= 0 && frameCount - endStart > 45;
+  const labels = ['TRY AGAIN', 'MENU'];
+  for (let k = 0; k < 2; k++) {
+    const r = endButtonRect(k);
+    fill(10, 25, 50, ready ? 230 : 120);
+    stroke(120, 200, 255, ready ? 220 : 90);
+    strokeWeight(2);
+    rect(r.x, r.y, r.w, r.h, 10);
+    noStroke();
+    fill(220, 240, 255, ready ? 255 : 110);
+    textAlign(CENTER, CENTER);
+    textSize(17);
+    text(labels[k], r.x + r.w / 2, r.y + r.h / 2);
   }
-  const scale = JOY_RADIUS / Math.max(distance, JOY_RADIUS);
-  vx *= scale;
-  vy *= scale;
-  fireStickX = vx / JOY_RADIUS;
-  fireStickY = vy / JOY_RADIUS;
-
-  // Convert the stick direction into a target far away from the ship.
-  // This lets the player aim in all directions instead of aiming at the pad.
-  const length = Math.max(width, height);
-  aimX = player ? player.x + (vx / JOY_RADIUS) * length : padX + vx;
-  aimY = player ? player.y + (vy / JOY_RADIUS) * length : padY + vy;
-}
-
-function drawRoundButton(by, label) {
-  fill(10, 20, 40, 170);
-  stroke(120, 200, 255, 170);
-  strokeWeight(2);
-  ellipse(BTN_X, by, BTN_R * 2, BTN_R * 2);
-  noStroke();
-  fill(220, 240, 255);
-  textAlign(CENTER, CENTER);
-  textSize(10);
-  text(label, BTN_X, by);
+  pop();
 }
 
 function drawTouchUI() {
-  if (!touchMode) return;
-  push();
-  rectMode(CORNER);
-  const playing = isPlaying();
+  updateTouchDom();
+  if (touchActive() && (gameState === GAME_OVER || gameState === VICTORY)) drawEndButtons();
+}
 
-  if (playing) {
-    // joystick: a faint hint at the bottom-left, then the real one where you touch
-    const active = joyTouchId !== null;
-    const ox = active ? joyOx : 105;
-    const oy = active ? joyOy : height - 105;
-    noFill();
-    stroke(120, 200, 255, active ? 140 : 70);
-    strokeWeight(3);
-    ellipse(ox, oy, JOY_RADIUS * 2, JOY_RADIUS * 2);
-    noStroke();
-    fill(120, 200, 255, active ? 150 : 60);
-    ellipse(ox + joyX * JOY_RADIUS, oy + joyY * JOY_RADIUS, 52, 52);
-    if (!active) {
-      fill(200, 225, 255, 120);
-      textAlign(CENTER, CENTER);
-      textSize(13);
-      text('MOVE', ox, oy);
-    }
+// ============================================================
+// FIT THE GAME TO THE SCREEN
+// The game is 800 x 600. On a phone (or a small window) the picture is scaled
+// down to fit, keeping its shape. On a big computer screen it stays 800 x 600.
+// ============================================================
+function canFullscreen() {
+  return typeof document !== 'undefined' && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+}
 
-    const padX = width - 105;
-    const padY = height - 105;
-    if (aimTouchId === null) {
-      noFill();
-      stroke(255, 120, 150, 70);
-      strokeWeight(3);
-      ellipse(padX, padY, JOY_RADIUS * 2, JOY_RADIUS * 2);
-      noStroke();
-      fill(255, 190, 205, 120);
-      textAlign(CENTER, CENTER);
-      textSize(13);
-      text('FIRE', padX, padY);
-    } else {
-      noFill();
-      stroke(255, 120, 150, 200);
-      strokeWeight(2);
-      ellipse(padX, padY, JOY_RADIUS * 2, JOY_RADIUS * 2);
-      const knobX = padX + fireStickX * JOY_RADIUS;
-      const knobY = padY + fireStickY * JOY_RADIUS;
-      fill(255, 160, 180, 170);
-      ellipse(knobX, knobY, 38, 38);
-    }
+function fitCanvasToScreen() {
+  if (typeof window === 'undefined' || !gameCanvas || !gameCanvas.style) return;
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const fit = touchMode || coarse || window.innerWidth < width + 24 || window.innerHeight < height + 24;
+  let w = width, h = height;
+  if (fit) {
+    const k = Math.min(window.innerWidth / width, window.innerHeight / height);
+    w = Math.floor(width * k);
+    h = Math.floor(height * k);
   }
+  gameCanvas.style.width = w + 'px';
+  gameCanvas.style.height = h + 'px';
+  document.body.classList.toggle('fit', fit);
+}
 
-  if (playing || gameState === PAUSED) {
-    drawRoundButton(BTN_PAUSE_Y, gameState === PAUSED ? 'PLAY' : 'PAUSE');
-    drawRoundButton(BTN_MUTE_Y, soundMuted ? 'SOUND OFF' : 'SOUND');
-    if (gameState === PAUSED) drawRoundButton(BTN_MENU_Y, 'MENU');
-  }
-
-  if (gameState === GAME_OVER || gameState === VICTORY) {
-    fill(200, 225, 255);
-    textAlign(CENTER, CENTER);
-    textSize(16);
-    text('TAP TO TRY AGAIN   \u2022   TAP THE BOTTOM-LEFT CORNER FOR MENU', width / 2, height - 40);
-  }
-  pop();
+function windowResized() {
+  fitCanvasToScreen();
 }

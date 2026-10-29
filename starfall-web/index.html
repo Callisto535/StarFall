@@ -1,116 +1,45 @@
-<!DOCTYPE html>
+push it to Satarfall<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Starfall</title>
   <!-- p5.js and its sound add-on, loaded from the internet -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js" crossorigin="anonymous"></script>
   <style>
-    * { box-sizing: border-box; }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      min-height: 100%;
-      background: #050816;
-      color: #9fb4d6;
-      font-family: Arial, sans-serif;
-    }
-
-    body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      min-height: 100dvh;
-      overflow-x: hidden;
-    }
-
-    /* Keep the original 800 x 600 (4:3) game canvas fully visible. */
-    canvas {
-      display: block;
-      width: min(100vw, 133.333dvh, 800px) !important;
-      height: auto !important;
-      max-width: 100vw;
-      max-height: 100dvh;
-      border: 1px solid #1d2a4a;
-      touch-action: none;
-      flex: 0 0 auto;
-    }
-
-    p {
-      font-size: 13px;
-      margin: 10px 12px 0;
-      text-align: center;
-    }
-
-    #err {
-      color: #ff7a7a;
-      max-width: 800px;
-      white-space: pre-wrap;
-      font-size: 13px;
-    }
-
-    #rotate { display: none; }
-
-    @media (pointer: coarse) {
-      html, body {
-        width: 100%;
-        height: 100%;
-        height: 100dvh;
-        min-height: 0;
-        overflow: hidden;
-        overscroll-behavior: none;
-      }
-
-      body {
-        padding: 0;
-        justify-content: center;
-      }
-
-      p, #err { display: none; }
-
-      canvas {
-        width: min(100vw, 133.333dvh) !important;
-        height: auto !important;
-        max-width: 100vw;
-        max-height: 100dvh;
-        border: 0;
-      }
-    }
-
-    @media (pointer: coarse) and (orientation: portrait) {
-      #rotate {
-        display: flex;
-        position: fixed;
-        inset: 0;
-        z-index: 1000;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-        text-align: center;
-        font-size: 18px;
-        background: #050816;
-        color: #fff;
-      }
-    }
+  :root { box-sizing: border-box; --bg: #eef2fb; --fg: #33415f; --line: #b9c4de;
+          padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #050816; --fg: #9fb4d6; --line: #1d2a4a; } }
+  :root[data-theme="dark"] { --bg: #050816; --fg: #9fb4d6; --line: #1d2a4a; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 12px 8px; }
+  #game { max-width: 100%; overflow-x: auto; }
+  p { font-size: 13px; margin: 10px 0 0; text-align: center; }
+  #err { color: #d23b3b; max-width: 800px; white-space: pre-wrap; font-size: 13px; }
+  canvas { display: block; border: 1px solid var(--line); touch-action: none; }
+  /* phone / small window: the game fills the screen */
+  html:has(body.fit) { overflow: hidden; overscroll-behavior: none; }
+  body.fit { padding: 0; justify-content: center; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; background: #050816; }
+  body.fit p { display: none; }
+  body.fit #game { max-width: none; overflow: visible; }
+  body.fit canvas { border: 0; }
+  #rotate { display: none; }
+  @media (pointer: coarse) and (orientation: portrait) {
+    #rotate { display: block; position: fixed; top: 0; left: 0; right: 0; padding: 10px; text-align: center; font-size: 15px; background: #d23b3b; color: #fff; z-index: 10; }
+  }
   </style>
 </head>
 <body>
   <div id="rotate">Turn your phone sideways to play</div>
   <main id="game"></main>
   <p>WASD move &nbsp;•&nbsp; Mouse aim &nbsp;•&nbsp; Hold click to fire &nbsp;•&nbsp; P pause &nbsp;•&nbsp; M mute &nbsp;•&nbsp; ESC menu</p>
+  <p>Phone: left side = joystick, right side = aim and fire</p>
   <pre id="err"></pre>
   <script>
-    // Shows any loading error on the page (for example when a script could not be downloaded).
-    window.addEventListener('error', function (e) {
-      document.getElementById('err').textContent +=
-        'ERROR: ' + e.message + (e.filename ? '\n  in ' + e.filename + ':' + e.lineno : '') + '\n';
-    });
+    window.addEventListener('error', function (e) { document.getElementById('err').textContent += 'ERROR: ' + e.message + '\n'; });
     window.addEventListener('unhandledrejection', function (e) {
       document.getElementById('err').textContent += 'ERROR: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '\n';
     });
