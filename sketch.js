@@ -805,6 +805,7 @@ function drawMenu() {
   text("WASD to move  \u2022  Mouse to aim  \u2022  Hold click to fire  \u2022  P to pause", width / 2, 475);
   text("Tip: destroy rocks before they surround you.", width / 2, 500);
   drawMenuNotice();
+  drawEventLog();
 }
 
 function drawCenteredTitle(title, y, size, c) {
@@ -2597,6 +2598,8 @@ function loadOptionalImage(file, onLoad) {
 }
 
 function setup() {
+  loadEventLog();
+  logEvent('setup() ran: the game (re)started from the beginning');
   const cnv = createCanvas(800, 600);
   gameCanvas = cnv.elt;
   if (isCoarse()) pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
@@ -2698,12 +2701,14 @@ function draw() {
     updateTouchControls();
     gameDraw();
     drawTouchUI();
+    trackStateChanges();
   } catch (e) {
     showError(e);
   }
 }
 
 function showError(e) {
+  logEvent('ERROR: ' + (e && e.message ? e.message : e));
   console.error(e);
   if (typeof window === 'undefined') throw e;   // (only used when testing outside a browser)
   gameCrashed = true;
@@ -3147,4 +3152,52 @@ function makeRockSprites(img) {
     rockSprite1 = null;
     rockSprite2 = null;
   }
+}
+
+// ============================================================
+// EVENT LOG
+// Every change of game state is written to the browser console (F12) and kept for
+// the menu screen. If the page is reloaded, the log survives, so the menu can show
+// exactly what happened just before.
+// ============================================================
+const STATE_NAMES = ['MENU', 'LEVEL_ROCKS', 'LEVEL_BOSS', 'VICTORY', 'GAME_OVER', 'FREE_LANCE', 'PAUSED',
+  'LEVEL_ALIEN', 'DANGER', 'LEVEL_FINAL', 'LEVEL_C2', 'PORTAL', 'CHAPTER_INTRO'];
+let eventLog = [];
+let loggedState = -1;
+let loggedLevel = -1;
+
+function loadEventLog() {
+  try {
+    const saved = sessionStorage.getItem('sfLog');
+    if (saved) eventLog = JSON.parse(saved);
+  } catch (e) { eventLog = []; }
+}
+
+function logEvent(msg) {
+  console.log('[Starfall] ' + msg);
+  eventLog.push('f' + frameCount + ' ' + msg);
+  if (eventLog.length > 14) eventLog.shift();
+  try { sessionStorage.setItem('sfLog', JSON.stringify(eventLog)); } catch (e) { /* ignore */ }
+}
+
+function trackStateChanges() {
+  if (gameState !== loggedState || (gameState === LEVEL_C2 && level !== loggedLevel)) {
+    logEvent((loggedState >= 0 ? STATE_NAMES[loggedState] : 'start') + ' -> ' + STATE_NAMES[gameState] +
+      ' | chapter ' + chapter + ' level ' + level + ' score ' + score +
+      (player ? ' hp ' + Math.round(player.health) : ''));
+    loggedState = gameState;
+    loggedLevel = level;
+  }
+}
+
+function drawEventLog() {
+  if (eventLog.length === 0) return;
+  push();
+  rectMode(CORNER);
+  noStroke();
+  fill(150, 175, 210, 200);
+  textAlign(LEFT, TOP);
+  textSize(10);
+  text('Last events:\n' + eventLog.slice(-8).join('\n'), 10, 10);
+  pop();
 }
