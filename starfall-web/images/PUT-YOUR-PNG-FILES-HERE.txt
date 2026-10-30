@@ -1,5 +1,0 @@
-Copy your pictures into this folder. Names the game looks for:
-ship.png, stone.png, ufo.png, alien.png, warship.png,
-aliencress.png (stage 2 raiders), t_saucer.png, t_bomb.png, t_egg.png,
-aliencre.png (stage 2 level 3 octopus), GreenEye.png (centipede head)
-Missing pictures are drawn as simple shapes.
