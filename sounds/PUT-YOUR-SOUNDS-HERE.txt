@@ -1,3 +1,0 @@
-Sounds the game looks for (WAV or MP3):
-laserShoot, explosion, blipSelect, synth, powerUp
-These starter WAV files can be replaced with your own files of the same names.

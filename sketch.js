@@ -118,7 +118,7 @@ let backgroundAlpha = 35;
 let starField = null;
 
 // ---------- SOUND ----------
-// Put sound files in data/sounds/ (WAV, AIF or MP3). Sound is always enabled.
+// Put MP3 sound files in data/sounds/. Sound is always enabled where supported.
 const SND_FOLDER = "sounds/";
 let sfxShoot;       // every left-click shot
 let sfxExplosion;   // rocks, aliens, bosses, bombs exploding
@@ -140,7 +140,7 @@ const MOBILE_LIMITS = {
   booms: 24,
   powerUps: 8,
 };
-const MOBILE_SOUND_ENABLED = false;
+const MOBILE_SOUND_ENABLED = true;
 
 // Loads an image from the data folder and prints in the CONSOLE what happened.
 // Looks in IMG_FOLDER first, then in data/ itself and a few common folder names,
@@ -2690,6 +2690,7 @@ function setup() {
 // Each sound tries a few file names in the sounds/ folder. Missing = silent.
 class Sfx {
   constructor(label, files, count, volume, minGap) {
+    this.label = label;
     this.voices = [];      // several copies so quick repeats can overlap
     this.next = 0;
     this.volume = volume;
@@ -2721,7 +2722,9 @@ class Sfx {
 
   play() {
     if (this.voices.length === 0) return;
-    if (frameCount - this.lastPlay < this.minGap) return;
+    const mobileGap = this.label === 'shoot' ? 6 : 12;
+    const minGap = isCoarse() ? Math.max(this.minGap, mobileGap) : this.minGap;
+    if (frameCount - this.lastPlay < minGap) return;
     this.lastPlay = frameCount;
     const v = this.voices[this.next % this.voices.length];
     this.next = (this.next + 1) % this.voices.length;
@@ -2733,13 +2736,13 @@ class Sfx {
 }
 
 function loadSounds() {
-  //                    name         file names to try (WAV or MP3)                              copies volume gap
+  //                    name         MP3 file                                      copies volume gap
   // One audio instance per effect keeps mobile browser memory usage low.
-  sfxShoot     = new Sfx('shoot',     ['laserShoot.wav', 'laserShoot.mp3', 'shoot.wav', 'shoot.mp3'],         1, 0.35, 0);
-  sfxExplosion = new Sfx('explosion', ['explosion.wav', 'explosion.mp3'],                                     1, 0.60, 3);
-  sfxSelect    = new Sfx('select',    ['blipSelect.wav', 'blipSelect.mp3', 'select.wav', 'select.mp3'],       1, 0.60, 0);
-  sfxPortal    = new Sfx('portal',    ['synth.wav', 'synth.mp3', 'portal.wav', 'portal.mp3'],                 1, 0.70, 0);
-  sfxPowerup   = new Sfx('powerup',   ['powerUp.wav', 'powerUp.mp3', 'powerup.wav', 'powerup.mp3'],           1, 0.70, 0);
+  sfxShoot     = new Sfx('shoot',     ['laserShoot.mp3'], 1, 0.35, 0);
+  sfxExplosion = new Sfx('explosion', ['explosion.mp3'],   1, 0.60, 3);
+  sfxSelect    = new Sfx('select',    ['blipSelect.mp3'],  1, 0.60, 0);
+  sfxPortal    = new Sfx('portal',    ['synth.mp3'],       1, 0.70, 0);
+  sfxPowerup   = new Sfx('powerup',   ['powerUp.mp3'],    1, 0.70, 0);
 }
 
 function useSilentSounds() {
