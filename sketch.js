@@ -2647,7 +2647,10 @@ function setup() {
   gameCanvas = cnv.elt;
   // The canvas is scaled down on phones. A native 2x/3x backing canvas adds
   // several megabytes without improving the logical 800x600 game resolution.
-  if (isCoarse()) pixelDensity(1);
+  if (isCoarse()) {
+    pixelDensity(1);
+    frameRate(30);
+  }
   watchForBrowserRestart();
   fitCanvasToScreen();
   buildTouchUI();
