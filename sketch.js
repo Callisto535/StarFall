@@ -125,6 +125,21 @@ let sfxSelect;      // choosing a game mode in the menu
 let sfxPortal;      // portal opening
 let sfxPowerup;     // collecting a spell
 
+// Mobile browsers may terminate a tab during a short-lived allocation spike.
+// Keep transient gameplay collections bounded so an intense fight cannot grow
+// the JavaScript heap indefinitely.
+const MOBILE_LIMITS = {
+  bullets: 45,
+  enemyBullets: 70,
+  missiles: 24,
+  enemies: 40,
+  aliens: 20,
+  tShips: 35,
+  eggs: 12,
+  booms: 24,
+  powerUps: 8,
+};
+
 // Loads an image from the data folder and prints in the CONSOLE what happened.
 // Looks in IMG_FOLDER first, then in data/ itself and a few common folder names,
 // and also finds wrong capitalisation (Alien.png) or a hidden double extension (alien.png.png).
@@ -180,6 +195,7 @@ function gameDraw() {
     updateFreeLance();
   }
 
+  limitMobileCollections();
   checkPlayerHealth();
   drawPlayer();
   drawFreezeOverlay();
@@ -189,6 +205,22 @@ function gameDraw() {
     drawBanner();
     messageTimer--;
   }
+}
+
+function limitMobileCollections() {
+  if (!isCoarse()) return;
+  const trim = (collection, limit) => {
+    if (collection.length > limit) collection.splice(0, collection.length - limit);
+  };
+  trim(bullets, MOBILE_LIMITS.bullets);
+  trim(enemyBullets, MOBILE_LIMITS.enemyBullets);
+  trim(missiles, MOBILE_LIMITS.missiles);
+  trim(enemies, MOBILE_LIMITS.enemies);
+  trim(aliens, MOBILE_LIMITS.aliens);
+  trim(tShips, MOBILE_LIMITS.tShips);
+  trim(eggs, MOBILE_LIMITS.eggs);
+  trim(booms, MOBILE_LIMITS.booms);
+  trim(powerUps, MOBILE_LIMITS.powerUps);
 }
 
 function isPlaying() {
@@ -675,7 +707,8 @@ function drawSpaceBackground() {
   else background(5, 8, 22);
   randomSeed(25);
   noStroke();
-  for (let i = 0; i < 100; i++) {
+  const starCount = isCoarse() ? 45 : 100;
+  for (let i = 0; i < starCount; i++) {
     let x = random(width);
     let y = random(height);
     let a = 70 + 150 * noise(x * 0.01, y * 0.01);
