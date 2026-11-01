@@ -215,7 +215,9 @@ function clearProjectilesAndEnemies() {
 }
 
 function startAtMenu(reason) {
-  menuReason = reason || '';
+  // Keep the browser-restart explanation discovered during setup. Explicit
+  // in-game navigation reasons should still replace it.
+  if (reason) menuReason = reason;
   rememberReason(menuReason);
   gameState = MENU;
   player = null;
@@ -2612,7 +2614,9 @@ function setup() {
   logEvent('setup() ran | ' + describeLoad());
   const cnv = createCanvas(800, 600);
   gameCanvas = cnv.elt;
-  if (isCoarse()) pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
+  // The canvas is scaled down on phones. A native 2x/3x backing canvas adds
+  // several megabytes without improving the logical 800x600 game resolution.
+  if (isCoarse()) pixelDensity(1);
   watchForBrowserRestart();
   fitCanvasToScreen();
   buildTouchUI();
