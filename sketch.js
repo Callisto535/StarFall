@@ -117,9 +117,8 @@ let mouseWasDown = false;
 let backgroundAlpha = 35;
 
 // ---------- SOUND ----------
-// Put sound files in data/sounds/ (WAV, AIF or MP3). Press M in the game to mute / unmute.
+// Put sound files in data/sounds/ (WAV, AIF or MP3). Sound is always enabled.
 const SND_FOLDER = "sounds/";
-let soundMuted = false;
 let sfxShoot;       // every left-click shot
 let sfxExplosion;   // rocks, aliens, bosses, bombs exploding
 let sfxSelect;      // choosing a game mode in the menu
@@ -943,7 +942,6 @@ function keyPressed() {
   if (key == 'a' || key == 'A') moveLeft = true;
   if (key == 'd' || key == 'D') moveRight = true;
 
-  if (key == 'm' || key == 'M') soundMuted = !soundMuted;
 
   if (key == 'p' || key == 'P') {
     if (gameState == PAUSED) {
@@ -2678,7 +2676,7 @@ class Sfx {
   }
 
   play() {
-    if (this.voices.length === 0 || soundMuted) return;
+    if (this.voices.length === 0) return;
     if (frameCount - this.lastPlay < this.minGap) return;
     this.lastPlay = frameCount;
     const v = this.voices[this.next % this.voices.length];
@@ -2692,11 +2690,12 @@ class Sfx {
 
 function loadSounds() {
   //                    name         file names to try (WAV or MP3)                              copies volume gap
-  sfxShoot     = new Sfx('shoot',     ['laserShoot.wav', 'laserShoot.mp3', 'shoot.wav', 'shoot.mp3'],         3, 0.35, 0);
-  sfxExplosion = new Sfx('explosion', ['explosion.wav', 'explosion.mp3'],                                     4, 0.60, 3);
+  // One audio instance per effect keeps mobile browser memory usage low.
+  sfxShoot     = new Sfx('shoot',     ['laserShoot.wav', 'laserShoot.mp3', 'shoot.wav', 'shoot.mp3'],         1, 0.35, 0);
+  sfxExplosion = new Sfx('explosion', ['explosion.wav', 'explosion.mp3'],                                     1, 0.60, 3);
   sfxSelect    = new Sfx('select',    ['blipSelect.wav', 'blipSelect.mp3', 'select.wav', 'select.mp3'],       1, 0.60, 0);
   sfxPortal    = new Sfx('portal',    ['synth.wav', 'synth.mp3', 'portal.wav', 'portal.mp3'],                 1, 0.70, 0);
-  sfxPowerup   = new Sfx('powerup',   ['powerUp.wav', 'powerUp.mp3', 'powerup.wav', 'powerup.mp3'],           2, 0.70, 0);
+  sfxPowerup   = new Sfx('powerup',   ['powerUp.wav', 'powerUp.mp3', 'powerup.wav', 'powerup.mp3'],           1, 0.70, 0);
 }
 
 // ---------------- SAFETY NET ----------------
@@ -2953,7 +2952,6 @@ function buildTouchUI() {
     tbtns[key] = b;
   }
   makeBtn('pause', () => togglePause());
-  makeBtn('sound', () => { soundMuted = !soundMuted; });
   makeBtn('full', null, () => { try { fullscreen(!fullscreen()); } catch (err) { /* ignore */ } });
   makeBtn('menu', () => {
     const now = Date.now();
@@ -3032,7 +3030,6 @@ function updateTouchDom() {
   const showBtns = want && (playing || paused);
   const isFull = typeof fullscreen === 'function' && fullscreen();
   setBtn('pause', showBtns, paused ? 'PLAY' : 'PAUSE');
-  setBtn('sound', showBtns, soundMuted ? 'MUTED' : 'SOUND');
   setBtn('full', showBtns && canFullscreen(), isFull ? 'EXIT' : 'FULL');
   if (!paused) menuArmedAt = 0;
   setBtn('menu', want && paused, (Date.now() - menuArmedAt < 2000) ? 'SURE?' : 'MENU');
