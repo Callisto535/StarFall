@@ -115,6 +115,7 @@ let moveUp, moveDown, moveLeft, moveRight;
 
 let mouseWasDown = false;
 let backgroundAlpha = 35;
+let starField = null;
 
 // ---------- SOUND ----------
 // Put sound files in data/sounds/ (WAV, AIF or MP3). Sound is always enabled.
@@ -705,17 +706,20 @@ function checkPlayerHealth() {
 function drawSpaceBackground() {
   if (chapter == 2) background(6, 26, 32);   // chapter 2: dark teal space
   else background(5, 8, 22);
-  randomSeed(25);
-  noStroke();
-  const starCount = isCoarse() ? 45 : 100;
-  for (let i = 0; i < starCount; i++) {
-    let x = random(width);
-    let y = random(height);
-    let a = 70 + 150 * noise(x * 0.01, y * 0.01);
-    fill(160, 190, 255, a);
-    ellipse(x, y, random(1, 3), random(1, 3));
+  if (starField == null) {
+    randomSeed(25);
+    starField = [];
+    const starCount = isCoarse() ? 45 : 100;
+    for (let i = 0; i < starCount; i++) {
+      starField.push({ x: random(width), y: random(height), size: random(1, 3), alpha: random(70, 220) });
+    }
+    randomSeed(frameCount);
   }
-  randomSeed(frameCount);
+  noStroke();
+  for (const star of starField) {
+    fill(160, 190, 255, star.alpha);
+    ellipse(star.x, star.y, star.size, star.size);
+  }
 }
 
 function drawPlayer() {
