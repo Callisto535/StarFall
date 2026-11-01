@@ -140,7 +140,7 @@ const MOBILE_LIMITS = {
   booms: 24,
   powerUps: 8,
 };
-const MOBILE_SOUND_ENABLED = true;
+const MOBILE_SOUND_ENABLED = false;
 
 // Loads an image from the data folder and prints in the CONSOLE what happened.
 // Looks in IMG_FOLDER first, then in data/ itself and a few common folder names,
