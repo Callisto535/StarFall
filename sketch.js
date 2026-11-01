@@ -2653,7 +2653,6 @@ function setup() {
   // several megabytes without improving the logical 800x600 game resolution.
   if (isCoarse()) {
     pixelDensity(1);
-    frameRate(30);
   }
   watchForBrowserRestart();
   fitCanvasToScreen();
