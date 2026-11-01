@@ -140,6 +140,7 @@ const MOBILE_LIMITS = {
   booms: 24,
   powerUps: 8,
 };
+const MOBILE_SOUND_ENABLED = false;
 
 // Loads an image from the data folder and prints in the CONSOLE what happened.
 // Looks in IMG_FOLDER first, then in data/ itself and a few common folder names,
@@ -2677,7 +2678,11 @@ function setup() {
     centipedeHeadSprite = (img.width >= 192 && img.height >= 288) ? img.get(0, 0, 96, 96) : img;
   });
 
-  loadSounds();
+  if (!isCoarse() || MOBILE_SOUND_ENABLED) {
+    loadSounds();
+  } else {
+    useSilentSounds();
+  }
   startAtMenu();
 }
 
@@ -2735,6 +2740,15 @@ function loadSounds() {
   sfxSelect    = new Sfx('select',    ['blipSelect.wav', 'blipSelect.mp3', 'select.wav', 'select.mp3'],       1, 0.60, 0);
   sfxPortal    = new Sfx('portal',    ['synth.wav', 'synth.mp3', 'portal.wav', 'portal.mp3'],                 1, 0.70, 0);
   sfxPowerup   = new Sfx('powerup',   ['powerUp.wav', 'powerUp.mp3', 'powerup.wav', 'powerup.mp3'],           1, 0.70, 0);
+}
+
+function useSilentSounds() {
+  const silent = { play() {} };
+  sfxShoot = silent;
+  sfxExplosion = silent;
+  sfxSelect = silent;
+  sfxPortal = silent;
+  sfxPowerup = silent;
 }
 
 // ---------------- SAFETY NET ----------------
