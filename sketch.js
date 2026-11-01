@@ -2744,7 +2744,7 @@ function showError(e) {
 //   Two analog sticks sit in the empty space BESIDE the game (left and right):
 //     left stick  = move the ship
 //     right stick = aim, and the ship fires while you push the stick
-//   Round buttons (pause, sound, fullscreen, menu) are in the right-hand space.
+//   Round buttons (pause, fullscreen, menu) are in the right-hand space.
 //   Computers keep WASD + mouse.
 // ============================================================
 
@@ -2764,7 +2764,7 @@ const sticks = {
   move: { id: null, ox: 0, oy: 0, vx: 0, vy: 0, el: null, knob: null },
   aim:  { id: null, ox: 0, oy: 0, vx: 0, vy: 0, el: null, knob: null },
 };
-const tbtns = {};                       // round buttons: pause, sound, full, menu
+const tbtns = {};                       // round buttons: pause, full, menu
 const tbtnLabel = {};
 
 function viewW() { return typeof window !== 'undefined' ? window.innerWidth : 852; }
@@ -2989,10 +2989,10 @@ function layoutTouchUI() {
   place(sticks.move, lx);
   place(sticks.aim, rx);
 
-  // buttons: top of the right-hand space (two per row), or a column at the top-right corner
+  // buttons: top of the right-hand space, or a column at the top-right corner
   const pos = roomy
-    ? { pause: [rx - 28, 34], sound: [rx + 28, 34], full: [rx, 90], menu: [lx, 34] }
-    : { pause: [vw - 34, 34], sound: [vw - 34, 90], full: [vw - 34, 146], menu: [34, 34] };
+    ? { pause: [rx, 34], full: [rx, 90], menu: [lx, 34] }
+    : { pause: [vw - 34, 34], full: [vw - 34, 90], menu: [34, 34] };
   for (const key of Object.keys(pos)) {
     tbtns[key].style.left = (pos[key][0] - 23) + 'px';
     tbtns[key].style.top = (pos[key][1] - 23) + 'px';
